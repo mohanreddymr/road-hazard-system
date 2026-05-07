@@ -1,0 +1,15 @@
+
+╔══════════════════════════════════════════╗
+║     ROAD HAZARD SYSTEM — SESSION REPORT  ║
+╚══════════════════════════════════════════╝
+
+Session Duration : 0 seconds
+Total Readings   : 0
+
+DECISION BREAKDOWN:
+  NORMAL  : 0  (0%)
+  CAUTION : 0 (0%)
+  HAZARD  : 0  (0%)
+
+Generated: 2026-03-23 10:55:04
+        

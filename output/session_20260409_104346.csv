@@ -1,0 +1,2 @@
+timestamp,imu_z,motion_score,decision,motor_speed,confidence
+10:43:47.772,1.85,0.0,HAZARD,56,64.0

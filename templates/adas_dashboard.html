@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ADAS — Road Hazard Detection System</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#020c16;--panel:#061828;--panel2:#0a1f30;
+  --border:#0e3a58;--border2:#1a5a80;
+  --cyan:#00e5ff;--cyan2:#00b8cc;--cyan-dim:#005566;
+  --green:#00ff88;--orange:#ff9500;--red:#ff3355;--yellow:#ffd60a;
+  --white:#ddf0ff;--muted:#3a6880;--muted2:#1e4060;
+  --font-hud:'Orbitron',monospace;
+  --font-data:'Share Tech Mono',monospace;
+  --font-body:'Exo 2',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--white);font-family:var(--font-body);}
+ 
+/* grid bg */
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,229,255,0.02) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,229,255,0.02) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;}
+/* scanlines */
+body::after{content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:999;}
+ 
+.wrapper{position:relative;z-index:1;width:100vw;height:100vh;
+  display:grid;grid-template-rows:54px 1fr 38px;}
+ 
+/* ══════════ HEADER ══════════ */
+header{display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;
+  background:linear-gradient(90deg,#010b14 0%,#061e30 40%,#061e30 60%,#010b14 100%);
+  border-bottom:1px solid var(--border);position:relative;}
+header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  animation:hglow 4s ease-in-out infinite;}
+@keyframes hglow{0%,100%{opacity:0.3}50%{opacity:1}}
+ 
+.h-left{display:flex;align-items:center;gap:12px;}
+.h-logo{width:34px;height:34px;border:2px solid var(--cyan);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,229,255,0.05);
+  animation:lpulse 3s ease-in-out infinite;}
+@keyframes lpulse{0%,100%{box-shadow:0 0 6px var(--cyan)}50%{box-shadow:0 0 18px var(--cyan),0 0 36px rgba(0,229,255,0.2)}}
+.h-logo svg{width:18px;height:18px;}
+.h-title{font-family:var(--font-hud);font-size:11px;font-weight:700;letter-spacing:3px;color:var(--cyan);}
+.h-sub{font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:2px;margin-top:1px;}
+ 
+.h-center{position:absolute;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;
+  background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.25);
+  border-radius:20px;padding:4px 14px;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 8px var(--green);animation:blink 1.2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}
+.live-txt{font-family:var(--font-hud);font-size:9px;color:var(--green);letter-spacing:3px;}
+ 
+.h-right{display:flex;gap:10px;}
+.hstat{display:flex;flex-direction:column;align-items:center;
+  background:rgba(0,229,255,0.04);border:1px solid var(--border);
+  border-radius:4px;padding:3px 12px;min-width:72px;}
+.hstat-v{font-family:var(--font-data);font-size:13px;color:var(--cyan);font-weight:bold;}
+.hstat-l{font-family:var(--font-data);font-size:7px;color:var(--muted);letter-spacing:2px;}
+ 
+/* ══════════ MAIN GRID ══════════ */
+/* 3 columns: left panel | camera (large) | right panel */
+.main{display:grid;grid-template-columns:260px 1fr 260px;gap:8px;padding:8px 10px;min-height:0;overflow:hidden;}
+ 
+/* ══════════ PANELS ══════════ */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  display:flex;flex-direction:column;position:relative;overflow:hidden;}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan-dim),transparent);pointer-events:none;}
+.ph{display:flex;align-items:center;gap:7px;padding:8px 12px 6px;
+  border-bottom:1px solid var(--border);flex-shrink:0;}
+.ph-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 5px var(--cyan);}
+.ph-title{font-family:var(--font-hud);font-size:8px;letter-spacing:3px;color:var(--cyan2);text-transform:uppercase;flex:1;}
+.ph-badge{font-family:var(--font-data);font-size:8px;padding:2px 7px;border-radius:2px;
+  background:rgba(0,229,255,0.07);border:1px solid var(--border2);color:var(--cyan);letter-spacing:1px;}
+ 
+/* ══════════ LEFT COLUMN ══════════ */
+.left-col{display:flex;flex-direction:column;gap:8px;}
+ 
+/* STATUS CARD */
+.status-card{flex:0 0 auto;padding:16px 14px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;}
+ 
+.status-ring-wrap{position:relative;width:130px;height:130px;
+  display:flex;align-items:center;justify-content:center;}
+.status-ring-wrap svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);}
+.ring-bg{fill:none;stroke:var(--border);stroke-width:7;}
+.ring-fg{fill:none;stroke-width:7;stroke-linecap:round;
+  stroke-dasharray:377;stroke-dashoffset:377;
+  transition:stroke-dashoffset 0.7s ease,stroke 0.4s ease;}
+.status-inner{z-index:1;text-align:center;}
+.status-word{font-family:var(--font-hud);font-size:15px;font-weight:900;letter-spacing:2px;transition:color 0.4s;}
+.status-conf{font-family:var(--font-data);font-size:10px;color:var(--muted);margin-top:3px;}
+ 
+/* Event counters */
+.counters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;}
+.counter{background:rgba(0,229,255,0.03);border:1px solid var(--border);
+  border-radius:4px;padding:8px 4px;text-align:center;}
+.counter-v{font-family:var(--font-hud);font-size:20px;font-weight:900;}
+.counter-l{font-family:var(--font-data);font-size:8px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
+ 
+/* SENSOR READINGS */
+.sensor-body{padding:10px 12px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:auto;}
+.sensor-row{display:flex;flex-direction:column;gap:5px;}
+.sensor-top{display:flex;justify-content:space-between;align-items:center;}
+.sensor-name{font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+.sensor-right{display:flex;align-items:center;gap:6px;}
+.sensor-val{font-family:var(--font-data);font-size:14px;color:var(--cyan);transition:color 0.3s;}
+.sensor-tag{font-family:var(--font-data);font-size:8px;padding:2px 6px;border-radius:2px;
+  border:1px solid currentColor;letter-spacing:1px;transition:color 0.3s,border-color 0.3s;}
+.bar-bg{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.bar-fg{height:100%;border-radius:3px;transition:width 0.35s ease,background 0.35s ease;}
+ 
+/* ══════════ CENTER — CAMERA (LARGE) ══════════ */
+.center-col{display:flex;flex-direction:column;gap:8px;}
+ 
+.cam-panel{flex:1;min-height:0;display:flex;flex-direction:column;}
+.cam-body{flex:1;min-height:0;position:relative;background:#000;overflow:hidden;}
+ 
+/* THE FIX — stream fills entire cam-body */
+#cameraStream{
+  position:absolute;
+  top:0;left:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:none;
+  z-index:1;
+}
+#noFeedMsg{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:var(--muted);font-family:var(--font-data);font-size:11px;
+  letter-spacing:1px;text-align:center;z-index:2;background:#000;
+}
+#noFeedMsg svg{opacity:0.25;}
+#camHudOverlay{position:absolute;inset:0;pointer-events:none;z-index:3;display:none;}
+#camDetectBox{
+  position:absolute;border:2px solid var(--green);border-radius:2px;
+  pointer-events:none;left:25%;top:15%;width:50%;height:60%;
+  opacity:0.9;z-index:4;display:none;
+  transition:border-color 0.3s;
+}
+#camDetectBox::before,#camDetectBox::after{
+  content:'';position:absolute;width:12px;height:12px;
+  border-color:inherit;border-style:solid;}
+#camDetectBox::before{top:-2px;left:-2px;border-width:2px 0 0 2px;}
+#camDetectBox::after{bottom:-2px;right:-2px;border-width:0 2px 2px 0;}
+#camDetectLabel{position:absolute;top:-20px;left:0;
+  font-family:var(--font-data);font-size:9px;letter-spacing:1px;
+  white-space:nowrap;color:var(--green);transition:color 0.3s;}
+ 
+.c-corner{position:absolute;width:18px;height:18px;border-color:rgba(0,229,255,0.6);border-style:solid;}
+.c-corner.tl{top:6px;left:6px;border-width:2px 0 0 2px;}
+.c-corner.tr{top:6px;right:6px;border-width:2px 2px 0 0;}
+.c-corner.bl{bottom:6px;left:6px;border-width:0 0 2px 2px;}
+.c-corner.br{bottom:6px;right:6px;border-width:0 2px 2px 0;}
+.c-scan{position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.4),transparent);
+  animation:cscan 3s linear infinite;}
+@keyframes cscan{from{top:0}to{top:100%}}
+.c-hud-bot{position:absolute;bottom:7px;left:10px;right:10px;
+  display:flex;justify-content:space-between;
+  font-family:var(--font-data);font-size:8px;color:rgba(0,229,255,0.5);letter-spacing:1px;}
+.c-hud-top{position:absolute;top:7px;left:10px;right:10px;
+  display:flex;justify-content:space-between;
+  font-family:var(--font-data);font-size:8px;color:rgba(0,229,255,0.5);letter-spacing:1px;}
+.cam-live-badge{position:absolute;top:7px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:5px;
+  background:rgba(0,0,0,0.65);border:1px solid rgba(0,229,255,0.2);
+  border-radius:12px;padding:3px 10px;
+  font-family:var(--font-data);font-size:8px;color:var(--cyan);letter-spacing:2px;
+  backdrop-filter:blur(4px);}
+ 
+/* Camera controls bar */
+.cam-ctrl{flex-shrink:0;padding:7px 10px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.4);}
+.ctrl-btn{font-family:var(--font-data);font-size:9px;letter-spacing:1px;
+  padding:5px 12px;border-radius:3px;cursor:pointer;border:1px solid;transition:all 0.2s;}
+.ctrl-btn.go{color:var(--green);border-color:var(--green);background:rgba(0,255,136,0.07);}
+.ctrl-btn.go:hover{background:rgba(0,255,136,0.18);}
+.ctrl-btn.stop{color:var(--red);border-color:var(--red);background:rgba(255,51,85,0.07);}
+.ctrl-btn.stop:hover{background:rgba(255,51,85,0.18);}
+#camInfoText{font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:1px;}
+ 
+/* MOTION SCORE BAR */
+.motion-panel{flex:0 0 auto;}
+.motion-body{padding:9px 12px;display:flex;align-items:center;gap:12px;}
+.motion-lbl{font-family:var(--font-data);font-size:9px;color:var(--muted);
+  letter-spacing:2px;white-space:nowrap;min-width:90px;}
+.motion-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+.motion-fill{height:100%;border-radius:4px;transition:width 0.3s ease,background 0.3s;}
+.motion-val{font-family:var(--font-data);font-size:15px;
+  min-width:42px;text-align:right;color:var(--cyan);transition:color 0.3s;}
+ 
+/* ══════════ RIGHT COLUMN ══════════ */
+.right-col{display:flex;flex-direction:column;gap:8px;}
+ 
+/* IMU GRAPH */
+.graph-body{flex:1;min-height:0;padding:8px 10px;}
+canvas#imuCanvas{width:100%;height:100%;display:block;}
+ 
+/* MOTOR GAUGE */
+.motor-body{padding:12px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.arc-bg{fill:none;stroke:var(--border);stroke-width:9;stroke-linecap:round;}
+.arc-fg{fill:none;stroke-width:9;stroke-linecap:round;
+  stroke-dasharray:220;stroke-dashoffset:220;
+  transition:stroke-dashoffset 0.6s ease,stroke 0.4s ease;}
+.motor-wrap{position:relative;width:160px;}
+.motor-center{position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-58%);text-align:center;}
+.motor-pct{font-family:var(--font-hud);font-size:24px;font-weight:900;
+  color:var(--cyan);line-height:1;transition:color 0.4s;}
+.motor-lbl{font-family:var(--font-data);font-size:8px;color:var(--muted);letter-spacing:2px;margin-top:2px;}
+.motor-ticks{display:flex;justify-content:space-between;width:160px;padding:0 4px;margin-top:2px;}
+.motor-tick{font-family:var(--font-data);font-size:8px;color:var(--muted);}
+ 
+/* EVENT LOG */
+.log-body{flex:1;min-height:0;overflow-y:auto;padding:6px 8px;
+  display:flex;flex-direction:column;gap:4px;}
+.log-body::-webkit-scrollbar{width:3px;}
+.log-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.log-item{display:flex;align-items:flex-start;gap:7px;padding:6px 8px;
+  border-radius:4px;border-left:2px solid transparent;
+  animation:lin 0.25s ease;flex-shrink:0;}
+@keyframes lin{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:translateX(0)}}
+.log-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.log-text{font-family:var(--font-body);font-size:11px;font-weight:500;
+  color:var(--white);flex:1;line-height:1.3;}
+.log-time{font-family:var(--font-data);font-size:8px;color:var(--muted);flex-shrink:0;margin-top:2px;}
+ 
+/* ══════════ FOOTER ══════════ */
+footer{display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;border-top:1px solid var(--border);background:var(--bg);
+  font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:1px;}
+.f-mid{display:flex;gap:18px;}
+.f-item{display:flex;align-items:center;gap:5px;}
+.f-dot{width:5px;height:5px;border-radius:50%;}
+ 
+/* ══════════ HAZARD FLASH ══════════ */
+.hflash{position:fixed;inset:0;pointer-events:none;z-index:500;
+  opacity:0;border:4px solid var(--red);
+  box-shadow:inset 0 0 80px rgba(255,51,85,0.12);}
+.hflash.on{animation:hf 0.5s ease-in-out infinite;}
+@keyframes hf{0%,100%{opacity:0}50%{opacity:1}}
+ 
+/* connection badge */
+#conn{position:fixed;bottom:46px;right:10px;
+  font-family:var(--font-data);font-size:9px;
+  padding:3px 10px;border-radius:3px;z-index:600;
+  border:1px solid;letter-spacing:1px;transition:all 0.3s;}
+#conn.ok{color:var(--green);border-color:var(--green);background:rgba(0,255,136,0.07);}
+#conn.no{color:var(--orange);border-color:var(--orange);background:rgba(255,149,0,0.07);}
+</style>
+</head>
+<body>
+<div class="hflash" id="hflash"></div>
+<div id="conn" class="no">● CONNECTING...</div>
+ 
+<div class="wrapper">
+ 
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="h-left">
+    <div class="h-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="h-title">Road Hazard Detection System</div>
+      <div class="h-sub">ADAS · SENSOR FUSION · ML CLASSIFIER · v3.0</div>
+    </div>
+  </div>
+  <div class="h-center">
+    <div class="live-dot"></div>
+    <div class="live-txt">LIVE</div>
+  </div>
+  <div class="h-right">
+    <div class="hstat"><div class="hstat-v" id="hTime">00:00:00</div><div class="hstat-l">SESSION</div></div>
+    <div class="hstat"><div class="hstat-v" id="hRead">0</div><div class="hstat-l">READINGS</div></div>
+    <div class="hstat"><div class="hstat-v" id="hHaz" style="color:var(--red)">0</div><div class="hstat-l">HAZARDS</div></div>
+  </div>
+</header>
+ 
+<!-- ══ MAIN ══ -->
+<div class="main">
+ 
+  <!-- ── LEFT COLUMN ── -->
+  <div class="left-col">
+ 
+    <!-- System Status -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-dot"></div>
+        <span class="ph-title">System Status</span>
+        <span class="ph-badge" id="statusBadge">MONITORING</span>
+      </div>
+      <div class="status-card">
+        <div class="status-ring-wrap">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="60"/>
+            <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="60" stroke="var(--green)"/>
+          </svg>
+          <div class="status-inner">
+            <div class="status-word" id="statusWord" style="color:var(--green)">NORMAL</div>
+            <div class="status-conf" id="statusConf">CONF: --</div>
+          </div>
+        </div>
+        <div class="counters">
+          <div class="counter">
+            <div class="counter-v" id="cntNormal" style="color:var(--green)">0</div>
+            <div class="counter-l">NORMAL</div>
+          </div>
+          <div class="counter">
+            <div class="counter-v" id="cntCaution" style="color:var(--orange)">0</div>
+            <div class="counter-l">CAUTION</div>
+          </div>
+          <div class="counter">
+            <div class="counter-v" id="cntHazard" style="color:var(--red)">0</div>
+            <div class="counter-l">HAZARD</div>
+          </div>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Sensor Readings -->
+    <div class="panel" style="flex:1;min-height:0;">
+      <div class="ph">
+        <div class="ph-dot"></div>
+        <span class="ph-title">Sensor Readings</span>
+      </div>
+      <div class="sensor-body">
+ 
+        <div class="sensor-row">
+          <div class="sensor-top">
+            <span class="sensor-name">IMU Z-Axis</span>
+            <div class="sensor-right">
+              <span class="sensor-tag" id="imuTag" style="color:var(--green);border-color:var(--green)">NORMAL</span>
+              <span class="sensor-val" id="imuVal">--</span>
+            </div>
+          </div>
+          <div class="bar-bg"><div class="bar-fg" id="imuBar" style="width:28%;background:var(--green)"></div></div>
+        </div>
+ 
+        <div class="sensor-row">
+          <div class="sensor-top">
+            <span class="sensor-name">Camera Motion</span>
+            <div class="sensor-right">
+              <span class="sensor-tag" id="camTag" style="color:var(--green);border-color:var(--green)">LOW</span>
+              <span class="sensor-val" id="camVal">--</span>
+            </div>
+          </div>
+          <div class="bar-bg"><div class="bar-fg" id="camBar" style="width:4%;background:var(--green)"></div></div>
+        </div>
+ 
+        <div class="sensor-row">
+          <div class="sensor-top">
+            <span class="sensor-name">ML Confidence</span>
+            <span class="sensor-val" id="confVal">--%</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fg" id="confBar" style="width:0%;background:var(--cyan)"></div></div>
+        </div>
+ 
+        <div class="sensor-row">
+          <div class="sensor-top">
+            <span class="sensor-name">Vertical Displacement</span>
+            <span class="sensor-val" id="vertVal">-- px</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fg" id="vertBar" style="width:1%;background:var(--cyan2)"></div></div>
+        </div>
+ 
+        <div class="sensor-row" style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border);">
+          <div class="sensor-top">
+            <span class="sensor-name" style="color:var(--muted2)">Motor Speed</span>
+            <span class="sensor-val" id="motorSmall">--%</span>
+          </div>
+          <div class="bar-bg" style="height:7px;">
+            <div class="bar-fg" id="motorBarSmall" style="width:0%;background:var(--green);height:100%;border-radius:3px;"></div>
+          </div>
+        </div>
+ 
+      </div>
+    </div>
+  </div>
+ 
+  <!-- ── CENTER COLUMN — LIVE CAMERA (LARGE) ── -->
+  <div class="center-col">
+ 
+    <!-- Camera Feed — takes all available height -->
+    <div class="panel cam-panel">
+      <div class="ph">
+        <div class="ph-dot" style="background:var(--red);box-shadow:0 0 5px var(--red);animation:blink 1s infinite;"></div>
+        <span class="ph-title">Live Camera Feed — AI Input</span>
+        <span class="ph-badge" id="camBadge" style="color:var(--orange);">NO FEED</span>
+      </div>
+ 
+      <!-- cam-body fills all remaining space in cam-panel -->
+      <div class="cam-body">
+ 
+        <!-- stream image — absolute fill, no overflow -->
+        <img id="cameraStream" alt="Live Camera Feed"/>
+ 
+        <!-- placeholder when no feed -->
+        <div id="noFeedMsg">
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2"/>
+            <line x1="1" y1="1" x2="23" y2="23" stroke="var(--red)" stroke-width="1.5"/>
+          </svg>
+          <div style="font-size:12px;font-weight:600;">CAMERA FEED INACTIVE</div>
+          <div style="font-size:9px;color:var(--muted2);margin-top:2px;">Press START FEED to begin live stream</div>
+        </div>
+ 
+        <!-- AI detection box overlay -->
+        <div id="camDetectBox">
+          <div id="camDetectLabel">TRACKING · NOMINAL</div>
+        </div>
+ 
+        <!-- HUD overlay -->
+        <div id="camHudOverlay">
+          <div class="c-corner tl"></div>
+          <div class="c-corner tr"></div>
+          <div class="c-corner bl"></div>
+          <div class="c-corner br"></div>
+          <div class="c-scan"></div>
+          <div class="cam-live-badge">
+            <div class="live-dot" style="width:5px;height:5px;"></div>
+            <span id="camBadgeInner">LIVE · 640×480</span>
+          </div>
+          <div class="c-hud-top">
+            <span id="camFPS">-- FPS</span>
+            <span id="camTS">--:--:--</span>
+          </div>
+          <div class="c-hud-bot">
+            <span>MOTION DETECTION ACTIVE</span>
+            <span id="camFrame">FRAME #0</span>
+          </div>
+        </div>
+ 
+      </div><!-- end cam-body -->
+ 
+      <!-- controls bar -->
+      <div class="cam-ctrl">
+        <button class="ctrl-btn go" id="btnStart" onclick="startFeed()">▶ START FEED</button>
+        <button class="ctrl-btn stop" id="btnStop" onclick="stopFeed()" style="display:none;">■ STOP</button>
+        <div style="flex:1;"></div>
+        <span id="camInfoText">Click START FEED to activate live camera</span>
+      </div>
+    </div>
+ 
+    <!-- Motion Score bar below camera -->
+    <div class="panel motion-panel">
+      <div class="ph">
+        <div class="ph-dot" style="background:var(--yellow);box-shadow:0 0 5px var(--yellow);"></div>
+        <span class="ph-title">Camera Motion Score</span>
+      </div>
+      <div class="motion-body">
+        <span class="motion-lbl">MOTION SCORE</span>
+        <div class="motion-track">
+          <div class="motion-fill" id="motionFill" style="width:0%;background:var(--green)"></div>
+        </div>
+        <span class="motion-val" id="motionVal">--</span>
+      </div>
+    </div>
+ 
+  </div>
+ 
+  <!-- ── RIGHT COLUMN ── -->
+  <div class="right-col">
+ 
+    <!-- IMU Graph -->
+    <div class="panel" style="flex:1.6;min-height:0;">
+      <div class="ph">
+        <div class="ph-dot"></div>
+        <span class="ph-title">IMU Z-Axis — Live Signal</span>
+        <span class="ph-badge" id="imuGraphBadge">1.0g</span>
+      </div>
+      <div class="graph-body"><canvas id="imuCanvas"></canvas></div>
+    </div>
+ 
+    <!-- Motor Gauge -->
+    <div class="panel" style="flex:0 0 auto;">
+      <div class="ph">
+        <div class="ph-dot" style="background:var(--orange);box-shadow:0 0 5px var(--orange);"></div>
+        <span class="ph-title">Motor Speed</span>
+      </div>
+      <div class="motor-body">
+        <div class="motor-wrap">
+          <svg width="160" height="90" viewBox="0 0 160 90" style="overflow:visible;">
+            <path class="arc-bg" d="M 20 84 A 60 60 0 0 1 140 84"/>
+            <path class="arc-fg" id="arcFg" d="M 20 84 A 60 60 0 0 1 140 84" stroke="var(--green)"/>
+          </svg>
+          <div class="motor-center">
+            <div class="motor-pct" id="motorPct">--%</div>
+            <div class="motor-lbl">MOTOR SPD</div>
+          </div>
+        </div>
+        <div class="motor-ticks">
+          <span class="motor-tick">0</span><span class="motor-tick">25</span>
+          <span class="motor-tick">50</span><span class="motor-tick">75</span>
+          <span class="motor-tick">100</span>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Event Log -->
+    <div class="panel" style="flex:1;min-height:0;">
+      <div class="ph">
+        <div class="ph-dot" style="background:var(--yellow);box-shadow:0 0 5px var(--yellow);"></div>
+        <span class="ph-title">Event Log</span>
+        <span class="ph-badge" id="logCount">0 EVENTS</span>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-item" style="border-left-color:var(--cyan);background:rgba(0,229,255,0.04);">
+          <div class="log-dot" style="background:var(--cyan)"></div>
+          <span class="log-text">Waiting for Python backend...</span>
+          <span class="log-time">--:--</span>
+        </div>
+      </div>
+    </div>
+ 
+  </div>
+</div>
+ 
+<!-- ══ FOOTER ══ -->
+<footer>
+  <span style="font-family:var(--font-hud);font-size:7px;letter-spacing:3px;">ADAS · FINAL YEAR PROJECT</span>
+  <div class="f-mid">
+    <div class="f-item"><div class="f-dot" style="background:var(--green)"></div>CAMERA ONLINE</div>
+    <div class="f-item"><div class="f-dot" style="background:var(--cyan)"></div>IMU ACTIVE</div>
+    <div class="f-item"><div class="f-dot" style="background:var(--orange)"></div>ML MODEL LOADED</div>
+    <div class="f-item"><div class="f-dot" style="background:var(--red)"></div>MOTOR CTRL READY</div>
+  </div>
+  <span id="footTime" style="font-family:var(--font-data);">SYS: --:--:--</span>
+</footer>
+ 
+</div><!-- end wrapper -->
+ 
+<script>
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+const S={
+  imuHist:Array(120).fill(1.0),
+  t0:Date.now(),
+  lastStatus:'NORMAL',
+  connected:false,
+  feedActive:false,
+  alertCount:0,
+  frameCount:0,
+  lastFT:Date.now(),
+};
+ 
+/* ══════════════════════════════════════
+   IMU CANVAS GRAPH
+══════════════════════════════════════ */
+const cvs=document.getElementById('imuCanvas');
+const ctx=cvs.getContext('2d');
+ 
+function resizeCvs(){
+  const r=cvs.parentElement.getBoundingClientRect();
+  cvs.width=r.width*devicePixelRatio; cvs.height=r.height*devicePixelRatio;
+  cvs.style.width=r.width+'px'; cvs.style.height=r.height+'px';
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(devicePixelRatio,devicePixelRatio);
+}
+resizeCvs();
+window.addEventListener('resize',()=>{resizeCvs();drawGraph();});
+ 
+function drawGraph(){
+  const W=cvs.clientWidth,H=cvs.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  const p={t:14,b:22,l:34,r:6},gW=W-p.l-p.r,gH=H-p.t-p.b;
+  const mn=0,mx=3.5;
+  // grid
+  ctx.strokeStyle='rgba(10,56,88,0.7)';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=p.t+(gH/4)*i;
+    ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(p.l+gW,y);ctx.stroke();
+    ctx.fillStyle='rgba(55,100,130,0.9)';ctx.font="8px 'Share Tech Mono'";
+    ctx.fillText((mx-(mx/4)*i).toFixed(1)+'g',1,y+3);
+  }
+  // threshold lines
+  const cy=p.t+gH*(1-(1.8-mn)/(mx-mn));
+  const hy=p.t+gH*(1-(2.3-mn)/(mx-mn));
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle='rgba(255,149,0,0.5)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(p.l,cy);ctx.lineTo(p.l+gW,cy);ctx.stroke();
+  ctx.fillStyle='rgba(255,149,0,0.75)';ctx.font="8px 'Share Tech Mono'";ctx.fillText('CAUTION',p.l+4,cy-3);
+  ctx.strokeStyle='rgba(255,51,85,0.5)';
+  ctx.beginPath();ctx.moveTo(p.l,hy);ctx.lineTo(p.l+gW,hy);ctx.stroke();
+  ctx.fillStyle='rgba(255,51,85,0.75)';ctx.fillText('HAZARD',p.l+4,hy-3);
+  ctx.setLineDash([]);
+  // signal
+  const hist=S.imuHist.slice(-80),step=gW/(hist.length-1);
+  ctx.shadowColor='#00e5ff';ctx.shadowBlur=5;
+  ctx.strokeStyle='#00e5ff';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  hist.forEach((v,i)=>{
+    const x=p.l+i*step,y=p.t+gH*(1-(v-mn)/(mx-mn));
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();ctx.shadowBlur=0;
+  // fill
+  ctx.beginPath();
+  hist.forEach((v,i)=>{const x=p.l+i*step,y=p.t+gH*(1-(v-mn)/(mx-mn));i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.lineTo(p.l+(hist.length-1)*step,p.t+gH);ctx.lineTo(p.l,p.t+gH);ctx.closePath();
+  const g=ctx.createLinearGradient(0,p.t,0,p.t+gH);
+  g.addColorStop(0,'rgba(0,229,255,0.13)');g.addColorStop(1,'rgba(0,229,255,0)');
+  ctx.fillStyle=g;ctx.fill();
+}
+ 
+/* ══════════════════════════════════════
+   CAMERA FEED
+══════════════════════════════════════ */
+function startFeed(){
+  S.feedActive=true;
+  const img=document.getElementById('cameraStream');
+  // cache-bust forces fresh connection
+  img.src='http://127.0.0.1:5000/video_feed?t='+Date.now();
+  img.style.display='block';
+  img.onerror=()=>{
+    if(S.feedActive) setTimeout(()=>{ img.src='http://127.0.0.1:5000/video_feed?t='+Date.now(); },1200);
+  };
+  document.getElementById('noFeedMsg').style.display='none';
+  document.getElementById('camHudOverlay').style.display='block';
+  document.getElementById('camDetectBox').style.display='block';
+  document.getElementById('btnStart').style.display='none';
+  document.getElementById('btnStop').style.display='inline-flex';
+  document.getElementById('camInfoText').textContent='Live feed active — Python backend stream';
+  document.getElementById('camBadge').textContent='● LIVE';
+  document.getElementById('camBadge').style.color='var(--green)';
+  addLog('Camera feed started — live stream active','NORMAL');
+  tickFPS();
+}
+ 
+function stopFeed(){
+  S.feedActive=false;
+  const img=document.getElementById('cameraStream');
+  img.src=''; img.style.display='none';
+  document.getElementById('noFeedMsg').style.display='flex';
+  document.getElementById('camHudOverlay').style.display='none';
+  document.getElementById('camDetectBox').style.display='none';
+  document.getElementById('btnStart').style.display='inline-flex';
+  document.getElementById('btnStop').style.display='none';
+  document.getElementById('camInfoText').textContent='Click START FEED to activate live camera';
+  document.getElementById('camBadge').textContent='NO FEED';
+  document.getElementById('camBadge').style.color='var(--orange)';
+  addLog('Camera feed stopped','CAUTION');
+}
+ 
+function tickFPS(){
+  if(!S.feedActive)return;
+  const now=Date.now();
+  const fps=Math.round(1000/(now-S.lastFT));
+  S.lastFT=now; S.frameCount++;
+  document.getElementById('camFPS').textContent=fps+' FPS';
+  document.getElementById('camFrame').textContent='FRAME #'+S.frameCount;
+  document.getElementById('camTS').textContent=new Date().toTimeString().slice(0,8);
+  setTimeout(tickFPS,100);
+}
+ 
+// auto-reconnect watchdog
+setInterval(()=>{
+  if(S.feedActive){
+    const img=document.getElementById('cameraStream');
+    if(!img.src||img.naturalWidth===0)
+      img.src='http://127.0.0.1:5000/video_feed?t='+Date.now();
+  }
+},5000);
+ 
+/* ══════════════════════════════════════
+   STATUS UPDATERS
+══════════════════════════════════════ */
+function setStatus(s){
+  const C={NORMAL:'#00ff88',CAUTION:'#ff9500',HAZARD:'#ff3355'};
+  const c=C[s]||'#00ff88';
+  document.getElementById('statusWord').textContent=s;
+  document.getElementById('statusWord').style.color=c;
+  document.getElementById('statusBadge').textContent=s;
+  // ring
+  const ring=document.getElementById('ringFg');
+  ring.style.stroke=c;
+  const off={NORMAL:0,CAUTION:0.5,HAZARD:0.9};
+  ring.style.strokeDashoffset=377*(1-(off[s]||0));
+  // detect box
+  document.getElementById('camDetectBox').style.borderColor=c;
+  document.getElementById('camDetectLabel').style.color=c;
+  document.getElementById('camDetectLabel').textContent=
+    s==='NORMAL'?'TRACKING · NOMINAL':s==='CAUTION'?'⚠ MOTION DETECTED':'🔴 HAZARD DETECTED';
+  // hazard flash
+  document.getElementById('hflash').className='hflash'+(s==='HAZARD'?' on':'');
+}
+ 
+function setMotor(pct){
+  const c=pct>=70?'#00ff88':pct>=40?'#ff9500':'#ff3355';
+  document.getElementById('motorPct').textContent=pct+'%';
+  document.getElementById('motorPct').style.color=c;
+  document.getElementById('arcFg').style.stroke=c;
+  document.getElementById('arcFg').style.strokeDashoffset=220*(1-pct/100);
+  document.getElementById('motorSmall').textContent=pct+'%';
+  document.getElementById('motorBarSmall').style.width=pct+'%';
+  document.getElementById('motorBarSmall').style.background=c;
+}
+ 
+function addLog(text,type){
+  const C={NORMAL:'#00ff88',CAUTION:'#ff9500',HAZARD:'#ff3355'};
+  const c=C[type]||'#00e5ff';
+  S.alertCount++;
+  document.getElementById('logCount').textContent=S.alertCount+' EVENTS';
+  const ts=new Date().toTimeString().slice(0,5);
+  const el=document.createElement('div');
+  el.className='log-item';
+  el.style.borderLeftColor=c;
+  el.style.background=type==='HAZARD'?'rgba(255,51,85,0.07)':type==='CAUTION'?'rgba(255,149,0,0.05)':'rgba(0,229,255,0.03)';
+  el.innerHTML=`<div class="log-dot" style="background:${c}"></div><span class="log-text">${text}</span><span class="log-time">${ts}</span>`;
+  const lb=document.getElementById('logBody');
+  lb.prepend(el);
+  while(lb.children.length>25)lb.removeChild(lb.lastChild);
+}
+ 
+function fmtTime(ms){
+  const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return[h,m,sec].map(x=>String(x).padStart(2,'0')).join(':');
+}
+ 
+/* ══════════════════════════════════════
+   DATA FETCH — every 200ms
+══════════════════════════════════════ */
+async function poll(){
+  try{
+    const res=await fetch('http://127.0.0.1:5000/data');
+    const d=await res.json();
+ 
+    if(!S.connected){
+      S.connected=true;
+      document.getElementById('conn').textContent='● CONNECTED';
+      document.getElementById('conn').className='ok';
+      addLog('Backend connected — live data streaming','NORMAL');
+    }
+ 
+    setStatus(d.status);
+    setMotor(d.motor_speed);
+ 
+    // IMU
+    const iz=parseFloat(d.imu_z);
+    const ip=Math.min(100,(iz/3.5)*100);
+    const ic=iz>2.3?'var(--red)':iz>1.8?'var(--orange)':'var(--green)';
+    document.getElementById('imuVal').textContent=iz.toFixed(2)+'g';
+    document.getElementById('imuBar').style.width=ip+'%';
+    document.getElementById('imuBar').style.background=ic;
+    document.getElementById('imuTag').textContent=iz>2.3?'SPIKE':iz>1.8?'HIGH':'NORMAL';
+    document.getElementById('imuTag').style.color=ic;
+    document.getElementById('imuTag').style.borderColor=ic;
+    document.getElementById('imuGraphBadge').textContent=iz.toFixed(2)+'g';
+ 
+    // Camera motion
+    const mv=parseFloat(d.motion_score);
+    const mp=Math.min(100,(mv/5)*100);
+    const mc=mv>2.0?'var(--red)':mv>1.5?'var(--orange)':'var(--green)';
+    document.getElementById('camVal').textContent=mv.toFixed(2);
+    document.getElementById('camBar').style.width=mp+'%';
+    document.getElementById('camBar').style.background=mc;
+    document.getElementById('camTag').textContent=mv>1.5?'HIGH':'LOW';
+    document.getElementById('camTag').style.color=mc;
+    document.getElementById('camTag').style.borderColor=mc;
+    document.getElementById('motionFill').style.width=mp+'%';
+    document.getElementById('motionFill').style.background=mc;
+    document.getElementById('motionVal').textContent=mv.toFixed(2);
+    document.getElementById('motionVal').style.color=mc;
+ 
+    // Confidence
+    const cf=parseFloat(d.confidence);
+    document.getElementById('confVal').textContent=cf.toFixed(1)+'%';
+    document.getElementById('confBar').style.width=Math.min(100,cf)+'%';
+    document.getElementById('statusConf').textContent='CONF: '+cf.toFixed(1)+'%';
+ 
+    // Vertical displacement
+    const vd=Math.abs(parseFloat(d.vert_disp));
+    document.getElementById('vertVal').textContent=vd.toFixed(1)+' px';
+    document.getElementById('vertBar').style.width=Math.min(100,vd/2)+'%';
+ 
+    // Counters
+    document.getElementById('cntNormal').textContent=d.normals;
+    document.getElementById('cntCaution').textContent=d.cautions;
+    document.getElementById('cntHazard').textContent=d.hazards;
+    document.getElementById('hRead').textContent=d.readings;
+    document.getElementById('hHaz').textContent=d.hazards;
+    document.getElementById('hTime').textContent=fmtTime(Date.now()-S.t0);
+    document.getElementById('footTime').textContent='SYS: '+new Date().toTimeString().slice(0,8);
+ 
+    // Alert on state change
+    if(d.status!==S.lastStatus){
+      const M={
+        NORMAL:'Road clear — resuming full speed',
+        CAUTION:'⚠ Caution — motion detected on front vehicle',
+        HAZARD:'🚨 HAZARD DETECTED — motor speed reduced'
+      };
+      addLog(M[d.status]||d.status,d.status);
+      S.lastStatus=d.status;
+    }
+ 
+    // IMU graph
+    S.imuHist.push(iz);
+    if(S.imuHist.length>120)S.imuHist.shift();
+    drawGraph();
+ 
+  }catch(e){
+    if(S.connected){
+      S.connected=false;
+      document.getElementById('conn').textContent='● DISCONNECTED';
+      document.getElementById('conn').className='no';
+      addLog('Connection lost — is main.py running?','CAUTION');
+    }
+    drawGraph();
+  }
+}
+ 
+setInterval(poll,200);
+poll();
+</script>
+</body>
+</html>
