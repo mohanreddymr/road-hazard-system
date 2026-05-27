@@ -92,7 +92,7 @@ class RoadDetector:
         road_crop = frame[road_y:, :]
  
         try:
-            results = self.model(road_crop, verbose=False, conf=0.35)
+            results = self.model(road_crop, verbose=False, conf=0.50)  # Increased from 0.35
             class_map = {
                 0: ('pothole',    'Direct pothole detected on road'),
                 1: ('crack',      'Road crack detected'),
@@ -154,44 +154,67 @@ class RoadDetector:
  
         # Convert to grayscale
         gray = cv2.cvtColor(road_crop, cv2.COLOR_BGR2GRAY)
- 
-        # ── Texture analysis using Laplacian ──
-        # High Laplacian variance = rough surface (pothole/crack)
+
+        # ── Laplacian texture (previous method) ──
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)
         texture   = float(laplacian.var())
         self.texture_buf.append(texture)
- 
-        # ── Brightness analysis ──
+
+        # ── Edge density using Canny (sharp discontinuities) ──
+        edges = cv2.Canny(gray, 50, 150)
+        edge_count = float(cv2.countNonZero(edges))
+        area = max(1, gray.shape[0] * gray.shape[1])
+        edge_density = edge_count / area
+
+        # ── Sobel gradient magnitude variance ──
+        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        sobel_mag = np.sqrt(sobelx**2 + sobely**2)
+        sobel_var = float(sobel_mag.var())
+
+        # ── Entropy of intensity histogram (measures texture randomness) ──
+        hist = cv2.calcHist([gray], [0], None, [64], [0,256])
+        hist_sum = hist.sum() if hist.sum() > 0 else 1
+        p = (hist / hist_sum).flatten()
+        # avoid log(0)
+        p_nonzero = p[p>0]
+        entropy = float(-np.sum(p_nonzero * np.log2(p_nonzero))) if p_nonzero.size>0 else 0.0
+
+        # Brightness baseline
         brightness = float(gray.mean())
         self.brightness_buf.append(brightness)
- 
+
+        # Need a small history to stabilise
         if len(self.texture_buf) < 5:
             return 'normal', 0.0, 'Analysing road...', annotated
- 
-        avg_texture    = sum(self.texture_buf) / len(self.texture_buf)
+
+        # Normalise feature signals to 0..1 using heuristics
+        # (INCREASED thresholds to reduce false positives)
+        tex_norm   = min(1.0, max(0.0, (texture - 600.0) / 3000.0))  # Was: 300/2000
+        edge_norm  = min(1.0, edge_density / 0.05)  # Was: 0.02 (stricter)
+        sobel_norm = min(1.0, max(0.0, (sobel_var - 200.0) / 1200.0))  # Was: 50/800
+        ent_norm   = min(1.0, entropy / 7.0)  # Was: 6.0 (stricter)
+
+        # Weighted fusion of texture cues (HIGHER MIN THRESHOLD)
+        combined_score = (
+            0.35 * tex_norm +
+            0.30 * edge_norm +
+            0.15 * sobel_norm +
+            0.05 * ent_norm
+        )
+
+        # Adjust confidence by brightness change (very dark/bright regions reduce confidence)
         avg_brightness = sum(self.brightness_buf) / len(self.brightness_buf)
- 
-        # Baseline from first few readings
-        # High texture spike = surface irregularity
-        tex_list = list(self.texture_buf)
-        tex_mean = sum(tex_list) / len(tex_list)
-        tex_max  = max(tex_list)
- 
-        # ── Classification ──
-        # Pothole: very high texture (rough edges/shadows)
-        # Speed hump: moderate texture + brightness change
-        # Normal: low, consistent texture
- 
-        if tex_max > tex_mean * 2.5 and tex_max > 800:
-            conf = min(1.0, (tex_max - 800) / 2000.0)
-            self._hold('pothole', conf,
-                       'Road texture spike — surface irregularity')
- 
-        elif tex_max > tex_mean * 1.8 and tex_max > 400:
-            conf = min(1.0, (tex_max - 400) / 1500.0)
-            self._hold('speed_hump', conf,
-                       'Road texture change — possible hump')
- 
+        brightness_penalty = min(0.4, abs(brightness - avg_brightness) / 80.0)
+        confidence = max(0.0, combined_score * (1.0 - brightness_penalty))
+
+        # Decision thresholds - MUCH STRICTER (tuned to reduce false positives)
+        if confidence > 0.75:  # Was: 0.60
+            # Strong irregularity → pothole
+            self._hold('pothole', confidence, 'Texture+edge strong — likely pothole')
+        elif confidence > 0.50:  # Was: 0.35
+            # Moderate → speed hump or rough patch
+            self._hold('speed_hump', confidence, 'Moderate texture change — possible hump')
         else:
             self._hold('normal', 0.0, 'Road surface clear')
  

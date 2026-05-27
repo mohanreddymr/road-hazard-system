@@ -30,7 +30,6 @@ class Dashboard:
         'POTHOLE'    :(30,30,230),
         'SPEED HUMP' :(0,155,255),
         'BRAKING'    :(0,200,255),
-        'CRACK'      :(0,120,220),
     }
  
     def __init__(self):
@@ -69,7 +68,7 @@ class Dashboard:
              vehicle_count=0,
              cam_event='NORMAL ROAD', cam_event_desc='',
              road_event='NORMAL ROAD', road_event_desc='',
-             imu_event_conf=0):
+             imu_event_conf=0, accuracy_pct=0.0, total_labeled=0):
  
         status  = str(result.get("decision",       "NORMAL"))
         motor   = int(result.get("motor_speed",    100))
@@ -107,17 +106,17 @@ class Dashboard:
         cam_c  = self.EC.get(cam_event,  self.GREEN)
         road_c = self.EC.get(road_event, self.GREEN)
         self._pill(panel,14,y+36,W//2-20,16,cam_c,
-                   f"CAM:{cam_event[:10]}")
+                   f"CAM:{cam_event[:15]}")
         self._pill(panel,W//2+4,y+36,W//2-18,16,road_c,
-                   f"RD:{road_event[:10]}")
+                   f"RD:{road_event[:15]}")
         y+=58
  
         # Descriptions
         if cam_event_desc and 'normal' not in cam_event.lower():
-            self._t(panel,f"  {cam_event_desc[:38]}",8,y,cam_c,0.34)
+            self._t(panel,f"  {cam_event_desc[:42]}",8,y,cam_c,0.34)
             y+=13
         if road_event_desc and 'normal' not in road_event.lower():
-            self._t(panel,f"  {road_event_desc[:38]}",8,y,road_c,0.34)
+            self._t(panel,f"  {road_event_desc[:42]}",8,y,road_c,0.34)
             y+=13
         y+=4
  
@@ -170,22 +169,8 @@ class Dashboard:
             cv2.circle(panel,(W-20-i*14,y-4),5,self.GREEN,-1)
         y+=16
  
-        # ═══ IMU ═══
-        y=self._hdr(panel,"IMU SENSOR (Secondary)",y)
-        ic=(self.RED if imu_z>2.3 else
-            self.ORANGE if imu_z>1.8 else self.GREEN)
-        self._bar(panel,8,y,W-16,12,min(imu_z/3.5,1),ic)
-        itag="SPIKE" if imu_z>2.3 else "HIGH" if imu_z>1.8 else "NORMAL"
-        self._t(panel,f"{imu_z:.3f}g  [{itag}]",10,y+24,ic,0.44)
-        y+=34
- 
-        # ═══ CAMERA MOTION ═══
-        y=self._hdr(panel,"CAMERA MOTION",y)
-        cc=(self.RED if motion>2 else self.ORANGE if motion>0.8 else self.GREEN)
-        self._bar(panel,8,y,W-16,12,min(motion/5,1),cc)
-        ctag="HIGH" if motion>0.8 else "LOW"
-        self._t(panel,f"{motion:.2f}  [{ctag}]",10,y+24,cc,0.44)
-        y+=34
+# IMU display removed for cleaner dashboard
+        # CAMERA MOTION display removed for cleaner dashboard
  
         # ═══ CONFIDENCE / SEVERITY (side by side) ═══
         y=self._hdr(panel,"ML CONFIDENCE  |  SEVERITY",y)
@@ -213,6 +198,17 @@ class Dashboard:
             cv2.circle(panel,(xo+14,yo+4),5,col,-1)
             self._t(panel,lbl,xo+24,yo+8,self.WHITE,0.37)
         y+=34
+
+        # ═══ REAL-TIME ACCURACY ═══
+        if total_labeled > 0:
+            y=self._hdr(panel,"VALIDATION ACCURACY",y)
+            acc_col=(self.GREEN if accuracy_pct>=80 else 
+                     self.ORANGE if accuracy_pct>=60 else self.RED)
+            self._bar(panel,8,y,W-16,12,accuracy_pct/100.0,acc_col)
+            self._t(panel,f"Accuracy: {accuracy_pct:.1f}% ({int(accuracy_pct*total_labeled/100)}/{total_labeled})",
+                    10,y+24,acc_col,0.44)
+            self._t(panel,"Press Y=Correct, N=Incorrect",10,y+40,self.CYAN,0.35)
+            y+=52
  
         # ═══ ALERT BANNER ═══
         if status!='NORMAL':
