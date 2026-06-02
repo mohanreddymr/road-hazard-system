@@ -1,0 +1,32 @@
+
+╔══════════════════════════════════════════╗
+║     ROAD HAZARD SYSTEM — SESSION REPORT  ║
+╚══════════════════════════════════════════╝
+
+Session Duration : 68 seconds
+Total Readings   : 472
+
+DECISION BREAKDOWN:
+  NORMAL  : 453  (96.0%)
+  CAUTION : 14 (3.0%)
+  HAZARD  : 5  (1.1%)
+
+Ground Truth Samples : 4
+  Correct           : 3 (75.0%)
+  Incorrect         : 1 (25.0%)
+
+CONFUSION MATRIX (actual → predicted):
+                HAZARD    NORMAL
+      HAZARD         0         1
+      NORMAL         0         3
+
+EVENT METRICS (actual event → predicted event):
+----------------------------------------------------------------------
+Event            Precision     Recall         F1    Support
+----------------------------------------------------------------------
+pothole               0.0%       0.0%       0.0%          0
+speed_hump           33.3%     100.0%      50.0%          1
+braking               0.0%       0.0%       0.0%          0
+normal              100.0%      33.3%      50.0%          3
+
+Generated: 2026-06-02 13:55:05

@@ -1,0 +1,14 @@
+
+╔══════════════════════════════════════════╗
+║     ROAD HAZARD SYSTEM — SESSION REPORT  ║
+╚══════════════════════════════════════════╝
+
+Session Duration : 673 seconds
+Total Readings   : 3738
+
+DECISION BREAKDOWN:
+  NORMAL  : 3004  (80.4%)
+  CAUTION : 674 (18.0%)
+  HAZARD  : 60  (1.6%)
+
+Generated: 2026-05-27 17:10:08

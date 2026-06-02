@@ -244,9 +244,10 @@ class RoadDetector:
             self.last_event = ev
             self.last_conf  = conf
             self.held_until = time.time() + self.HOLD_SEC
-        elif time.time() >= self.held_until:
+        else:
             self.last_event = 'normal'
             self.last_conf  = 0.0
+            self.held_until = 0.0
  
     def _get_desc(self):
         descs = {

@@ -21,6 +21,9 @@ latest_data = {
     "hazards":      0,
     "cautions":     0,
     "normals":      0,
+    "accuracy_pct": 0.0,
+    "total_labeled":0,
+    "correct_labeled":0,
 }
 
 latest_frame = None

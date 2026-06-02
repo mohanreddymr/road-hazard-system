@@ -760,6 +760,11 @@ footer{
             <div class="counter-l">HAZARD</div>
           </div>
 
+          <div class="counter">
+            <div class="counter-v" id="accuracyVal" style="color:var(--cyan)">--%</div>
+            <div class="counter-l">ACCURACY</div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -1257,6 +1262,8 @@ async function poll(){
     document.getElementById('cntNormal').textContent=d.normals;
     document.getElementById('cntCaution').textContent=d.cautions;
     document.getElementById('cntHazard').textContent=d.hazards;
+    document.getElementById('accuracyVal').textContent =
+      d.total_labeled > 0 ? d.accuracy_pct.toFixed(1) + '%' : '--%';
 
     document.getElementById('hRead').textContent=d.readings;
     document.getElementById('hHaz').textContent=d.hazards;

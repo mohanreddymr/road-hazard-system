@@ -1,0 +1,24 @@
+======================================================================
+📊 REAL-TIME VALIDATION ACCURACY REPORT
+======================================================================
+
+Session File: C:\Users\Munchi Reddy\Desktop\road-hazard-system\output\session_5.csv
+Feedback File: C:\Users\Munchi Reddy\Desktop\road-hazard-system\output\session_5_feedback.csv
+
+Total Labeled Frames: 4
+Correct Predictions : 2
+Incorrect Predictions: 2
+Overall Accuracy    : 50.0%
+
+ACCURACY BY DECISION TYPE:
+----------------------------------------------------------------------
+NORMAL                    2/4      →   50.0%
+
+EVENT METRICS (actual event → predicted event):
+----------------------------------------------------------------------
+Event            Precision     Recall         F1    Support
+----------------------------------------------------------------------
+pothole               0.0%       0.0%       0.0%          0
+speed_hump           33.3%     100.0%      50.0%          1
+braking               0.0%       0.0%       0.0%          0
+normal              100.0%      33.3%      50.0%          3

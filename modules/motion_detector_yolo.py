@@ -168,10 +168,11 @@ class TrackedVehicle:
             self.held_conf  = conf
             self.held_desc  = desc
             self.held_until = time.time() + self.HOLD_SEC
-        elif time.time() >= self.held_until:
+        else:
             self.held_event = 'normal'
             self.held_conf  = 0.0
             self.held_desc  = 'Road normal'
+            self.held_until = 0.0
  
     def get_motion_score(self):
         ev,conf,_ = self.classify_event()
@@ -265,9 +266,9 @@ class MotionDetectorYOLO:
         img_cx = w / 2.0
         img_cy = h / 2.0
         for vid, tv in self.vehicles.items():
-            # Exclude vehicles detected as oncoming from primary selection
-            if getattr(tv, 'oncoming', False):
-                continue
+            # Penalize oncoming detections, but do not exclude them entirely.
+            # This avoids losing braking/warning events when a vehicle grows in the frame.
+            penalty = 0.8 if getattr(tv, 'oncoming', False) else 1.0
             x1, y1, x2, y2 = tv.box
             area = (x2 - x1) * (y2 - y1)
 
@@ -287,6 +288,9 @@ class MotionDetectorYOLO:
             else:
                 metric = float(area)
 
+            if getattr(tv, 'oncoming', False):
+                metric = metric * 0.8 if metric >= 0 else metric * 1.2
+
             if metric > best_metric:
                 best_metric = metric
                 self.primary = tv
@@ -296,23 +300,20 @@ class MotionDetectorYOLO:
             x1,y1,x2,y2=tv.box
             is_p=(tv==self.primary)
 
-            # If vehicle is oncoming, mark in red and reduce priority
-            if getattr(tv, 'oncoming', False):
+            # If non-primary vehicle is oncoming, mark in red.
+            if getattr(tv, 'oncoming', False) and not is_p:
                 col = (0,0,255)
                 thk = 1
                 ev = 'normal'
             else:
-                if is_p:
-                    ev,evc,evd = tv.classify_event()
-                    col = self.EV_COLORS.get(ev,(80,255,80))
-                    thk = 2
-                else:
-                    ev='normal'; col=(70,70,70); thk=1
+                ev,evc,evd = tv.classify_event() if is_p or not getattr(tv, 'oncoming', False) else ('normal',0.0,'')
+                col = self.EV_COLORS.get(ev,(80,255,80))
+                thk = 2 if is_p else 1
 
             cv2.rectangle(annotated,(x1,y1),(x2,y2),col,thk)
 
-            # ADAS corners on primary (only for non-oncoming primary)
-            if is_p and not getattr(tv, 'oncoming', False):
+            # ADAS corners on primary
+            if is_p:
                 L=14
                 for p1,p2 in [
                     ((x1,y1),(x1+L,y1)),((x1,y1),(x1,y1+L)),
@@ -330,7 +331,7 @@ class MotionDetectorYOLO:
             cv2.putText(annotated,lbl,(x1,y1-10),
                         cv2.FONT_HERSHEY_SIMPLEX,0.50,col,1,cv2.LINE_AA)
 
-            if is_p and not getattr(tv, 'oncoming', False):
+            if is_p:
                 dm=tv.get_distance_m()
                 sp=tv.get_speed_kmh(dm)
                 parts=[]

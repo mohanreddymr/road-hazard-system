@@ -1,0 +1,1 @@
+timestamp,imu_z,imu_x,imu_y,motion_score,camera_event,camera_conf,road_event,road_conf,rear_event,rear_conf,decision,confidence,severity_score,motor_speed,lora_event,lora_sent,lora_confidence_check,lora_latency_ms,motion_conf,imu_conf,road_conf_fusion,ground_truth

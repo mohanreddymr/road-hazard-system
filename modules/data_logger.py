@@ -1,5 +1,7 @@
 import csv
 import os
+import re
+from collections import defaultdict
 from datetime import datetime
 
 class DataLogger:
@@ -11,10 +13,10 @@ class DataLogger:
         )
         os.makedirs(self.output_dir, exist_ok=True)
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_number = self._next_session_number()
         self.csv_path = os.path.join(
             self.output_dir,
-            f"session_{timestamp}.csv"
+            f"session_{self.session_number}.csv"
         )
         
         self.total_readings = 0
@@ -25,6 +27,7 @@ class DataLogger:
         self.correct_count  = 0
         self.incorrect_count= 0
         self.confusion      = {}
+        self.event_confusion = defaultdict(lambda: defaultdict(int))
         self.session_start  = datetime.now()
         
         with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
@@ -46,6 +49,17 @@ class DataLogger:
         print(f"Logging to: {self.csv_path}")
         print("-" * 40)
     
+    def _next_session_number(self):
+        pattern = re.compile(r'session_(\d+)\.csv$')
+        numbers = []
+        for filename in os.listdir(self.output_dir):
+            match = pattern.match(filename)
+            if match:
+                value = int(match.group(1))
+                if value < 10000:
+                    numbers.append(value)
+        return max(numbers, default=0) + 1
+
     def log(self, imu_z, motion_score, fusion_result, ground_truth=None, imu_x=None, imu_y=None, 
             cam_event='normal', cam_conf=0.0, road_event='normal', road_conf=0.0, 
             rear_event='normal', rear_conf=0.0, lora_event='normal', lora_sent=False, lora_latency_ms=0.0):
@@ -57,13 +71,22 @@ class DataLogger:
         elif decision == "HAZARD":  self.hazard_count  += 1
         
         if ground_truth is not None:
-            actual = str(ground_truth).strip().upper()
+            actual_event = str(ground_truth).strip().lower().replace(' ', '_')
+            actual = actual_event.upper()
+            event_to_decision = {
+                'POTHOLE': 'HAZARD',
+                'SPEED_HUMP': 'HAZARD',
+                'BRAKING': 'CAUTION',
+                'NORMAL': 'NORMAL'
+            }
+            actual_decision = event_to_decision.get(actual, actual)
             self.total_gt += 1
-            if decision == actual:
+            if decision == actual_decision:
                 self.correct_count += 1
             else:
                 self.incorrect_count += 1
-            self.confusion[(actual, decision)] = self.confusion.get((actual, decision), 0) + 1
+            self.confusion[(actual_decision, decision)] = self.confusion.get((actual_decision, decision), 0) + 1
+            self.event_confusion[actual_event][lora_event] += 1
         
         lora_confidence = fusion_result.get("confidence", 0) / 100.0
         lora_would_send = (decision == "HAZARD" and lora_confidence >= 0.75) or (decision == "NORMAL")
@@ -106,6 +129,8 @@ DECISION BREAKDOWN:
             summary += f"  Correct           : {self.correct_count} ({accuracy}%)\n"
             summary += f"  Incorrect         : {self.incorrect_count} ({round(100 - accuracy, 1)}%)\n\n"
             summary += self._build_confusion_matrix() + "\n"
+            if self.event_confusion:
+                summary += "\n" + self._build_event_metrics() + "\n"
             summary += "\n"
         summary += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         
@@ -129,6 +154,32 @@ DECISION BREAKDOWN:
                 row.append(f"{self.confusion.get((actual, predicted), 0):>10}")
             lines.append("".join(row))
         return "\n".join(lines)
+
+    def _build_event_metrics(self):
+        if not self.event_confusion:
+            return "No event metrics available."
+
+        labels = ['pothole', 'speed_hump', 'braking', 'normal']
+        lines = ["EVENT METRICS (actual event → predicted event):"]
+        lines.append("-" * 70)
+        lines.append(f"{'Event':<15} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
+        lines.append("-" * 70)
+
+        for label in labels:
+            precision, recall, f1, support = self._compute_event_metrics(label)
+            lines.append(f"{label:<15} {precision*100:>9.1f}% {recall*100:>9.1f}% {f1*100:>9.1f}% {support:>10}")
+        return "\n".join(lines)
+
+    def _compute_event_metrics(self, label):
+        confusion = self.event_confusion
+        tp = confusion[label].get(label, 0)
+        fp = sum(confusion[pred].get(label, 0) for pred in confusion if pred != label)
+        fn = sum(confusion[label].get(pred, 0) for pred in confusion[label] if pred != label)
+        precision = tp / (tp + fp) if tp + fp > 0 else 0.0
+        recall = tp / (tp + fn) if tp + fn > 0 else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if precision + recall > 0 else 0.0
+        support = sum(confusion[label].values())
+        return precision, recall, f1, support
     
     def _pct(self, count):
         if self.total_readings == 0:
